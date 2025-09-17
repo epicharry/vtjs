@@ -64,6 +64,8 @@ def calculate_peak_rank(mmr_data):
             "peak_rank_tier": 0,
             "peak_rank_name": "UNRANKED",
             "peak_season_id": None,
+            "peak_season_wins": 0,
+            "peak_season_games": 0,
             "current_rank_tier": 0,
             "current_rr": 0,
             "last_game_mmr_diff": 0
@@ -71,7 +73,25 @@ def calculate_peak_rank(mmr_data):
     
     # Find peak rank across all seasons
     seasons = list(seasonal_info.values())
-    peak_season = max(seasons, key=lambda x: x.get("CompetitiveTier", 0))
+    
+    # Filter out seasons with no competitive tier data
+    valid_seasons = [s for s in seasons if s.get("CompetitiveTier", 0) > 0]
+    
+    if not valid_seasons:
+        # No ranked games played
+        latest_update = mmr_data.get("LatestCompetitiveUpdate", {})
+        return {
+            "peak_rank_tier": 0,
+            "peak_season_id": None,
+            "peak_season_wins": 0,
+            "peak_season_games": 0,
+            "current_rank_tier": latest_update.get("TierAfterUpdate", 0),
+            "current_rr": latest_update.get("RankedRatingAfterUpdate", 0),
+            "last_game_mmr_diff": latest_update.get("RankedRatingEarned", 0),
+            "all_seasons": seasonal_info
+        }
+    
+    peak_season = max(valid_seasons, key=lambda x: x.get("CompetitiveTier", 0))
     
     # Get current rank info
     latest_update = mmr_data.get("LatestCompetitiveUpdate", {})
@@ -110,26 +130,39 @@ def display_peak_rank_info(peak_info):
     print(f"Peak Rank: {get_rank_name(peak_info['peak_rank_tier'])}")
     print(f"Peak Rank Tier: {peak_info['peak_rank_tier']}")
     print(f"Peak Season ID: {peak_info['peak_season_id']}")
-    print(f"Peak Season Wins: {peak_info['peak_season_wins']}")
-    print(f"Peak Season Games: {peak_info['peak_season_games']}")
     
-    if peak_info['peak_season_games'] > 0:
-        winrate = (peak_info['peak_season_wins'] / peak_info['peak_season_games']) * 100
-        print(f"Peak Season Winrate: {winrate:.1f}%")
+    if peak_info['peak_rank_tier'] > 0:
+        print(f"Peak Season Wins: {peak_info['peak_season_wins']}")
+        print(f"Peak Season Games: {peak_info['peak_season_games']}")
+        
+        if peak_info['peak_season_games'] > 0:
+            winrate = (peak_info['peak_season_wins'] / peak_info['peak_season_games']) * 100
+            print(f"Peak Season Winrate: {winrate:.1f}%")
+    else:
+        print("No ranked games played yet.")
     
     print("\nCurrent Rank Information:")
     print("-" * 30)
     print(f"Current Rank: {get_rank_name(peak_info['current_rank_tier'])}")
     print(f"Current RR: {peak_info['current_rr']}")
-    print(f"Last Game MMR Change: {peak_info['last_game_mmr_diff']:+d}")
+    
+    if peak_info['last_game_mmr_diff'] is not None:
+        print(f"Last Game MMR Change: {peak_info['last_game_mmr_diff']:+d}")
+    else:
+        print("Last Game MMR Change: No recent games")
     
     print(f"\nAll Seasons Summary:")
     print("-" * 30)
-    for season_id, season_data in peak_info['all_seasons'].items():
-        tier = season_data.get('CompetitiveTier', 0)
-        wins = season_data.get('NumberOfWins', 0)
-        games = season_data.get('NumberOfGames', 0)
-        print(f"Season {season_id[:8]}...: {get_rank_name(tier)} ({wins}W/{games}G)")
+    
+    if peak_info['all_seasons']:
+        for season_id, season_data in peak_info['all_seasons'].items():
+            tier = season_data.get('CompetitiveTier', 0)
+            wins = season_data.get('NumberOfWins', 0)
+            games = season_data.get('NumberOfGames', 0)
+            if games > 0:  # Only show seasons with games played
+                print(f"Season {season_id[:8]}...: {get_rank_name(tier)} ({wins}W/{games}G)")
+    else:
+        print("No competitive seasons found.")
 
 if __name__ == "__main__":
     try:
